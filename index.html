@@ -66,10 +66,23 @@
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.06);
             box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-            overflow-y: auto; padding: 14px;
+            overflow-y: auto; overflow-x: hidden; padding: 14px;
             transition: transform 0.3s ease;
         }
         .sidebar.hidden { transform: translateX(-320px); }
+
+        /* Show-sidebar floating button — visible only when sidebar is hidden */
+        .show-sidebar-btn {
+            position: fixed; top: 56px; left: 8px; z-index: 95;
+            width: 32px; height: 32px;
+            background: rgba(22,27,34,0.95); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; color: #8b95a5; cursor: pointer;
+            display: none; align-items: center; justify-content: center;
+            transition: all 0.3s;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        .show-sidebar-btn:hover { background: rgba(96,165,250,0.2); color: #60a5fa; }
+        .show-sidebar-btn.visible { display: flex; }
 
         .sidebar h2 {
             color: #e2e8f0; font-size: 13px; font-weight: 600;
@@ -162,16 +175,17 @@
         }
         .legend-labels { display: flex; justify-content: space-between; font-size: 10px; color: #6b7280; }
 
-        /* Toggle button */
+        /* Toggle button — sits inside sidebar, top-right corner */
         .toggle-btn {
-            position: fixed; top: 56px; left: 316px; z-index: 95;
-            width: 32px; height: 32px;
-            background: rgba(22,27,34,0.95); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 8px; color: #8b95a5; cursor: pointer;
+            position: absolute; top: 8px; right: 8px; z-index: 95;
+            width: 28px; height: 28px;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 6px; color: #8b95a5; cursor: pointer;
             display: flex; align-items: center; justify-content: center;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            font-size: 12px;
         }
-        .toggle-btn:hover { background: rgba(96,165,250,0.2); color: #60a5fa; }
+        .toggle-btn:hover { background: rgba(96,165,250,0.15); color: #60a5fa; }
 
         /* ── Info Panel (Right side) ── */
         .info-panel {
@@ -313,13 +327,11 @@
         </div>
     </header>
 
-    <!-- Toggle sidebar button -->
-    <button class="toggle-btn" id="toggleSidebar" title="Ẩn/Hiện bảng điều khiển">
-        <i class="fas fa-bars"></i>
-    </button>
-
-    <!-- Left Sidebar -->
+    <!-- Left Sidebar (toggle button inside) -->
     <div class="sidebar" id="sidebar">
+        <button class="toggle-btn" id="toggleSidebar" title="Ẩn/Hiện bảng điều khiển">
+            <i class="fas fa-times"></i>
+        </button>
         <h2><i class="fas fa-sliders-h"></i> Bảng điều khiển</h2>
 
         <!-- Color Mode -->
@@ -449,6 +461,11 @@
             <div class="chart-container"><canvas id="histChart"></canvas></div>
         </div>
     </div>
+
+    <!-- Floating button to re-show sidebar when hidden -->
+    <button class="show-sidebar-btn" id="showSidebar" title="Hiện bảng điều khiển">
+        <i class="fas fa-bars"></i>
+    </button>
 
     <!-- Right Info Panel -->
     <div class="info-panel" id="infoPanel">
@@ -1035,9 +1052,16 @@
             debouncedOpacityRender();
         });
 
-        // Sidebar toggle
+        // Sidebar toggle — hide sidebar & show floating button
         document.getElementById('toggleSidebar').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.toggle('hidden');
+            document.getElementById('sidebar').classList.add('hidden');
+            document.getElementById('showSidebar').classList.add('visible');
+        });
+
+        // Show sidebar button — show sidebar & hide floating button
+        document.getElementById('showSidebar').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.remove('hidden');
+            document.getElementById('showSidebar').classList.remove('visible');
         });
     }
 
