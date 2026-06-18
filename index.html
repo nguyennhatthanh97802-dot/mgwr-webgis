@@ -669,16 +669,16 @@
             return;
         }
 
-        // Load satellite imagery (OpenStreetMap - no token needed)
+        // Load dark basemap (Esri Dark Gray Canvas - no token needed)
         try {
-            const osmImagery = new Cesium.UrlTemplateImageryProvider({
-                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                credit: '© OpenStreetMap contributors',
-                maximumLevel: 19
+            const darkBasemap = new Cesium.UrlTemplateImageryProvider({
+                url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+                credit: '© Esri, HERE, Garmin, © OpenStreetMap contributors',
+                maximumLevel: 16
             });
-            viewer.imageryLayers.addImageryProvider(osmImagery, 0);
+            viewer.imageryLayers.addImageryProvider(darkBasemap, 0);
             viewer.scene.requestRender();
-        } catch (err) { console.warn('OSM imagery failed:', err); }
+        } catch (err) { console.warn('Dark basemap imagery failed:', err); }
 
         // Hide credits
         try {
