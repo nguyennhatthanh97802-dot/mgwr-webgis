@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MGWR WebGIS Visualization</title>
+
+    <!-- Cesium 3D Library -->
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Cesium.js"></script>
+    <script>
+        // Cesium Ion token - use empty to avoid auth errors with Ion services
+        Cesium.Ion.defaultAccessToken = undefined;
+    </script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js for histogram -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Embedded MGWR data (no backend needed) -->
+    <script src="data.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+
+        #cesiumContainer { width: 100vw; height: 100vh; }
+
+        /* ── Header ── */
+        .header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            height: 48px;
+            background: linear-gradient(135deg, #fdfdfd 100%);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+        }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .header-left .logo { color: #e94560; font-size: 20px; }
+        .header-left h1 { color: #0c0000; font-size: 16px; font-weight: 600; }
+        .header-left h1 span { color: #e94560; }
+        .header-center { color: #464545; font-size: 12px; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        .header-right .badge {
+            background: rgba(233,69,96,0.15); color: #e94560;
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+        }
+        .header-right .gh-link {
+            color: #464545; text-decoration: none; font-size: 13px;
+            padding: 4px 8px; border-radius: 6px; transition: all 0.2s;
+        }
+        .header-right .gh-link:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+        /* ── Sidebar Control Panel ── */
+        .sidebar {
+            position: fixed; top: 56px; left: 8px; z-index: 90;
+            width: 320px; max-height: calc(100vh - 72px);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            overflow-y: auto; padding: 16px;
+            transition: transform 0.3s ease;
+        }
+        .sidebar.hidden { transform: translateX(-340px); }
+
+        .sidebar h2 {
+            color: #292424; font-size: 14px; font-weight: 600;
+            margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+        }
+        .sidebar h2 i { color: #e94560; }
+
+        .panel-section {
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px; padding: 12px; margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .panel-section h3 {
+            color: #464545; font-size: 12px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        /* Color mode selector */
+        .color-mode-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+        .color-mode-btn {
+            flex: 1; min-width: 60px;
+            padding: 6px 8px; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px; background: transparent;
+            color: #464545; font-size: 11px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .color-mode-btn:hover { border-color: #e94560; color: #464545; }
+        .color-mode-btn.active {
+            background: rgba(233,69,96,0.2); border-color: #e94560;
+            color: #e94560; font-weight: 600;
+        }
+
+        /* Height mode selector */
+        .height-mode-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+        .height-mode-btn {
+            flex: 1; min-width: 60px;
+            padding: 6px 8px; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 6px; background: transparent;
+            color: #464545; font-size: 11px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .height-mode-btn:hover { border-color: #09313a; color: #464545; }
+        .height-mode-btn.active {
+            background: rgba(0,210,255,0.2); border-color: #083842;
+            color: #043541; font-weight: 600;
+        }
+
+        /* Filter sliders */
+        .filter-row { margin-bottom: 8px; }
+        .filter-row label {
+            display: flex; justify-content: space-between; align-items: center;
+            color: #464545; font-size: 11px; margin-bottom: 3px;
+        }
+        .filter-row label .val { color: #0a3b46; font-weight: 600; }
+        .filter-row input[type="range"] {
+            width: 100%; height: 4px; -webkit-appearance: none;
+            background: rgba(255,255,255,0.1); border-radius: 2px; outline: none;
+        }
+        .filter-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 14px; height: 14px;
+            background: #062d36; border-radius: 50%; cursor: pointer;
+        }
+
+        /* Checkbox filter */
+        .checkbox-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 4px 0; cursor: pointer;
+        }
+        .checkbox-row input[type="checkbox"] { accent-color: #e94560; }
+        .checkbox-row label { color: #464545; font-size: 12px; cursor: pointer; }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px; padding: 8px; text-align: center;
+        }
+        .stat-card .num { color: #06323b; font-size: 18px; font-weight: 700; }
+        .stat-card .lbl { color: #464545; font-size: 10px; text-transform: uppercase; }
+
+        /* Legend */
+        .legend-bar {
+            height: 12px; border-radius: 6px; margin: 6px 0;
+            background: linear-gradient(to right, #313695, #4575b4, #74add1, #abd9e9, #fee090, #fdae61, #f46d43, #d73027);
+        }
+        .legend-labels { display: flex; justify-content: space-between; font-size: 10px; color: #464545; }
+
+        /* Toggle button */
+        .toggle-btn {
+            position: fixed; top: 56px; left: 336px; z-index: 95;
+            width: 32px; height: 32px;
+            background: rgba(22,33,62,0.9); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px; color: #464545; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s;
+        }
+        .toggle-btn:hover { background: #e94560; }
+
+        /* ── Info Panel (Right side) ── */
+        .info-panel {
+            position: fixed; top: 56px; right: 8px; z-index: 90;
+            width: 300px;
+            background: rgba(22, 33, 62, 0.92);
+            backdrop-filter: blur(12px);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            padding: 16px;
+            display: none;
+        }
+        .info-panel.show { display: block; }
+        .info-panel .close-btn {
+            position: absolute; top: 8px; right: 12px;
+            background: none; border: none; color: #888; cursor: pointer; font-size: 16px;
+        }
+        .info-panel .close-btn:hover { color: #e94560; }
+        .info-panel h2 {
+            color: #464545; font-size: 14px; margin-bottom: 12px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .info-panel h2 i { color: #e94560; }
+
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .info-item {
+            background: rgba(255,255,255,0.04); border-radius: 6px; padding: 8px;
+        }
+        .info-item .label { color: #252525; font-size: 10px; text-transform: uppercase; }
+        .info-item .value { color: #464545; font-size: 14px; font-weight: 600; }
+        .info-item.full { grid-column: 1 / -1; }
+
+        .sig-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 10px; font-weight: 600; margin: 2px;
+        }
+        .sig-badge.sig { background: rgba(233,69,96,0.2); color: #e94560; }
+        .sig-badge.nsig { background: rgba(255,255,255,0.05); color: #666; }
+
+        /* ── Loading ── */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200;
+            background: rgba(10,15,30,0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s;
+        }
+        .loading-overlay.hide { opacity: 0; pointer-events: none; }
+        .loading-spinner {
+            width: 50px; height: 50px;
+            border: 3px solid rgba(233,69,96,0.2);
+            border-top-color: #e94560;
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { color: #aaa; margin-top: 16px; font-size: 14px; }
+        .loading-sub { color: #666; font-size: 12px; margin-top: 4px; }
+
+        /* ── Bottom status bar ── */
+        .status-bar {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+            height: 28px; background: rgba(10,15,30,0.9);
+            display: flex; align-items: center; padding: 0 16px;
+            font-size: 11px; color: #666;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .status-bar .coord { color: #07353f; margin-right: 20px; }
+        .status-bar .info { color: #888; }
+
+        /* Scrollbar */
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+
+        /* ── Dashboard panels ── */
+        .dashboard-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .dashboard-stat {
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px; padding: 10px 12px;
+        }
+        .dashboard-stat .val { font-size: 18px; font-weight: 700; color: #e2e8f0; line-height: 1; }
+        .dashboard-stat .lbl { font-size: 10px; color: #718096; margin-top: 3px; }
+        .dashboard-stat.accent-green .val { color: #48bb78; }
+        .dashboard-stat.accent-blue .val { color: #63b3ed; }
+        .dashboard-stat.accent-orange .val { color: #ed8936; }
+        .dashboard-stat.accent-red .val { color: #fc8181; }
+
+        .bw-row { display: flex; justify-content: space-between; font-size: 12px; color: #a0aec0; line-height: 2; }
+        .bw-row .bw-val { font-weight: 600; }
+        .bw-row .bw-note { font-size: 10px; font-weight: 400; color: #718096; }
+        .bw-divider { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 6px; margin-top: 4px; }
+
+        .coef-row { display: flex; justify-content: space-between; font-size: 12px; color: #a0aec0; line-height: 1.9; }
+        .coef-note { font-size: 10px; color: #718096; margin-bottom: 4px; }
+
+        .sens-row { display: flex; justify-content: space-between; font-size: 11px; color: #a0aec0; line-height: 1.8; }
+        .sens-divider { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 5px; margin-top: 3px; }
+
+        .chart-container { position: relative; height: 140px; }
+
+        /* ── Hover tooltip ── */
+        #hoverTooltip {
+            position: fixed; background: rgba(30,37,53,0.95); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px; padding: 12px 14px; font-size: 12px;
+            pointer-events: none; z-index: 9999; display: none;
+            max-width: 240px; line-height: 1.6;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #hoverTooltip .tt-title { font-weight: 600; color: #464545; margin-bottom: 6px; }
+        #hoverTooltip .tt-row { color: #464545; display: flex; justify-content: space-between; }
+        #hoverTooltip .tt-row span { color: #464545; font-weight: 500; margin-left: 12px; }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Đang tải dữ liệu` MGWR...</div>
+        <div class="loading-sub">Khởi tạo CesiumJS 3D Globe</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <i class="fas fa-globe-asia logo"></i>
+            <h1>MGWR <span>WebGIS </span></h1>
+        </div>
+        <div class="header-center">
+            Phân tích hồi quy địa lý trọng tài đa biến (n=750) - WGS84
+        </div>
+        <div class="header-right">
+            <span class="badge"><i class="fas fa-fire"></i> LST Analysis</span>
+            <span class="badge"><i class="fas fa-chart-line"></i> MGWR Model</span>
+            <a href="https://github.com/" target="_blank" class="gh-link" title="GitHub"><i class="fab fa-github"></i></a>
+        </div>
+    </header>
+
+    <!-- Toggle sidebar button -->
+    <button class="toggle-btn" id="toggleSidebar" title="Ẩn/Hiện bảng điều khiển">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Left Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <h2><i class="fas fa-sliders-h"></i> Bảng điều khiển</h2>
+
+        <!-- Color Mode -->
+        <div class="panel-section">
+            <h3><i class="fas fa-palette"></i> Chế độ màu sắc</h3>
+            <div class="color-mode-btns">
+                <button class="color-mode-btn active" data-mode="lst">LST</button>
+                <button class="color-mode-btn" data-mode="beta_ndvi">β NDVI</button>
+                <button class="color-mode-btn" data-mode="beta_ndbi">β NDBI</button>
+                <button class="color-mode-btn" data-mode="beta_distw">β DistW</button>
+                <button class="color-mode-btn" data-mode="ndvi">NDVI</button>
+                <button class="color-mode-btn" data-mode="sig">Significant</button>
+            </div>
+        </div>
+
+        <!-- Height Mode -->
+        <div class="panel-section">
+            <h3><i class="fas fa-arrows-alt-v"></i> Chiều cao cột 3D</h3>
+            <div class="height-mode-btns">
+                <button class="height-mode-btn active" data-mode="lst">LST</button>
+                <button class="height-mode-btn" data-mode="ndvi">NDVI</button>
+                <button class="height-mode-btn" data-mode="residual">Residual</button>
+                <button class="height-mode-btn" data-mode="flat">Phẳng</button>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="panel-section">
+            <h3><i class="fas fa-filter"></i> Bộ lọc</h3>
+            <div class="filter-row">
+                <label>LST Range <span class="val" id="lstRangeVal">20 - 55°C</span></label>
+                <input type="range" id="lstMin" min="20" max="55" value="20" step="0.5">
+                <input type="range" id="lstMax" min="20" max="55" value="55" step="0.5">
+            </div>
+            <div class="filter-row">
+                <label>NDVI Range <span class="val" id="ndviRangeVal">-1.0 - 1.0</span></label>
+                <input type="range" id="ndviMin" min="-1" max="1" value="-1" step="0.05">
+                <input type="range" id="ndviMax" min="-1" max="1" value="1" step="0.05">
+            </div>
+            <div class="checkbox-row">
+                <input type="checkbox" id="sigOnly" unchecked>
+                <label for="sigOnly">Chỉ hiển thị điểm có ý nghĩa thống kê</label>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="panel-section">
+            <h3><i class="fas fa-chart-bar"></i> Thống kê</h3>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="num" id="statTotal">-</div><div class="lbl">Tổng điểm</div></div>
+                <div class="stat-card"><div class="num" id="statVisible">-</div><div class="lbl">Đang hiển thị</div></div>
+                <div class="stat-card"><div class="num" id="statAvgLST">-</div><div class="lbl">LST TB (°C)</div></div>
+                <div class="stat-card"><div class="num" id="statSigCount">-</div><div class="lbl">Significant</div></div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="panel-section">
+            <h3><i class="fas fa-rainbow"></i> Legend</h3>
+            <div class="legend-bar" id="legendBar"></div>
+            <div class="legend-labels">
+                <span id="legendMin">20°C</span>
+                <span id="legendMax">55°C</span>
+            </div>
+            <div id="dynamicLegend" style="font-size:12px;margin-top:8px"></div>
+        </div>
+
+        <!-- Layer opacity -->
+        <div class="panel-section">
+            <h3><i class="fas fa-eye"></i> Hiển thị</h3>
+            <div class="filter-row">
+                <label>Độ trong suốt <span class="val" id="opacityVal">85%</span></label>
+                <input type="range" id="opacitySlider" min="10" max="100" value="85" step="5">
+            </div>
+        </div>
+
+        <!-- ── Dashboard: Model Summary ── -->
+        <div class="panel-section">
+            <h3><i class="fas fa-chart-line"></i> Model Summary (n=750)</h3>
+            <div class="dashboard-stat-grid">
+                <div class="dashboard-stat accent-blue"><div class="val">0.802</div><div class="lbl">Adj. R²</div></div>
+                <div class="dashboard-stat accent-green"><div class="val">976</div><div class="lbl">AICc</div></div>
+                <div class="dashboard-stat"><div class="val" style="font-size:14px">−0.026</div><div class="lbl">Moran's I (ns)</div></div>
+                <div class="dashboard-stat"><div class="val" style="font-size:14px">3.7 min</div><div class="lbl">Runtime</div></div>
+            </div>
+        </div>
+
+        <!-- ── Dashboard: Bandwidth ── -->
+        <div class="panel-section">
+            <h3><i class="fas fa-expand-arrows-alt"></i> Bandwidth (adaptive bisquare)</h3>
+            <div>
+                <div class="bw-row"><span>BW NDVI</span><span class="bw-val" style="color:#68d391">120 nn <span class="bw-note">local–meso</span></span></div>
+                <div class="bw-row"><span>BW NDBI</span><span class="bw-val" style="color:#63b3ed">300 nn <span class="bw-note">meso–regional</span></span></div>
+                <div class="bw-row"><span>BW Dist_Water</span><span class="bw-val" style="color:#ed8936">741 nn <span class="bw-note">regional</span></span></div>
+                <div class="bw-row bw-divider"><span>BW ratio NDBI/NDVI</span><span class="bw-val" style="color:#e2e8f0">2.50×</span></div>
+            </div>
+        </div>
+
+        <!-- ── Dashboard: Coefficient Summary ── -->
+        <div class="panel-section">
+            <h3><i class="fas fa-superscript"></i> Coefficient Summary</h3>
+            <div>
+                <div class="coef-row"><span>β̄ NDVI</span><span style="color:#68d391">+0.123 ± 0.144</span></div>
+                <div class="coef-note">55% sig+, 1% sig−, range [−0.13, +0.32]</div>
+                <div class="coef-row"><span>β̄ NDBI</span><span style="color:#63b3ed">+0.708 ± 0.007</span></div>
+                <div class="coef-note">100% sig+ — dominant driver</div>
+                <div class="coef-row"><span>β̄ Dist_Water</span><span style="color:#ed8936">+0.047 ± 0.412</span></div>
+                <div class="coef-note">36% sig, spatially variable</div>
+            </div>
+        </div>
+
+        <!-- ── Dashboard: Sensitivity ── -->
+        <div class="panel-section">
+            <h3><i class="fas fa-balance-scale"></i> Sensitivity n=600 vs n=750</h3>
+            <div>
+                <div class="sens-row"><span>BW NDVI</span><span>113 → <strong style="color:#e2e8f0">120</strong> (+6.2%)</span></div>
+                <div class="sens-row"><span>BW NDBI</span><span>298 → <strong style="color:#e2e8f0">300</strong> (+0.7%)</span></div>
+                <div class="sens-row"><span>BW Dist_W</span><span>756 → <strong style="color:#e2e8f0">741</strong> (−2.0%)</span></div>
+                <div class="sens-row"><span>Adj. R²</span><span>0.798 → <strong style="color:#48bb78">0.802</strong></span></div>
+                <div class="sens-row sens-divider"><span>Kết luận</span><span style="color:#48bb78;font-weight:600">✓ Ổn định</span></div>
+            </div>
+        </div>
+
+        <!-- ── Dashboard: Histogram β NDVI ── -->
+        <div class="panel-section">
+            <h3><i class="fas fa-chart-bar"></i> Phân phối β NDVI</h3>
+            <div class="chart-container"><canvas id="histChart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Right Info Panel -->
+    <div class="info-panel" id="infoPanel">
+        <button class="close-btn" onclick="document.getElementById('infoPanel').classList.remove('show')">
+            <i class="fas fa-times"></i>
+        </button>
+        <h2><i class="fas fa-info-circle"></i> Thông tin điểm</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="label">Tọa độ</div>
+                <div class="value" id="infoCoord">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">LST</div>
+                <div class="value" id="infoLST">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">NDVI</div>
+                <div class="value" id="infoNDVI">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">NDBI</div>
+                <div class="value" id="infoNDBI">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Dist Water (m)</div>
+                <div class="value" id="infoDistW">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Residual</div>
+                <div class="value" id="infoResidual">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">β NDVI (norm)</div>
+                <div class="value" id="infoBetaNDVI">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">β NDBI (norm)</div>
+                <div class="value" id="infoBetaNDBI">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">β Dist_W (norm)</div>
+                <div class="value" id="infoBetaDistW">-</div>
+            </div>
+            <div class="info-item">
+                <div class="label">t-NDVI</div>
+                <div class="value" id="infoTNDVI">-</div>
+            </div>
+            <div class="info-item full">
+                <div class="label">Biến có ý nghĩa thống kê</div>
+                <div class="value" id="infoSigVars">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cesium Container -->
+    <div id="cesiumContainer"></div>
+
+    <!-- Hover Tooltip -->
+    <div id="hoverTooltip">
+        <div class="tt-title"></div>
+        <div class="tt-body"></div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <span class="coord" id="statusCoord"><i class="fas fa-location-dot"></i> Lat: -- | Lng: --</span>
+        <span class="info" id="statusInfo">MGWR WebGIS 3D | Loading...</span>
+    </div>
+
+    <script>
+    // =========================================================================
+    // MGWR WebGIS 3D - Main Script
+    // =========================================================================
+
+    let viewer, mgwrDataSource;
+    let mgwrData = [];
+    let filteredData = [];
+    let colorMode = 'lst';
+    let heightMode = 'lst';
+
+    // ── Color scales ──
+    function lstColor(val, min, max) {
+        // Blue → Yellow → Red (like a heat map)
+        const t = Math.max(0, Math.min(1, (val - min) / (max - min)));
+        let r, g, b;
+        if (t < 0.25) {
+            const s = t / 0.25; r = 0; g = Math.round(s * 170); b = Math.round(200 + s * 55);
+        } else if (t < 0.5) {
+            const s = (t - 0.25) / 0.25; r = Math.round(s * 255); g = Math.round(170 + s * 85); b = Math.round(255 - s * 145);
+        } else if (t < 0.75) {
+            const s = (t - 0.5) / 0.25; r = 255; g = Math.round(255 - s * 130); b = Math.round(110 - s * 80);
+        } else {
+            const s = (t - 0.75) / 0.25; r = 255; g = Math.round(125 - s * 125); b = Math.round(30 - s * 30);
+        }
+        return new Cesium.Color(r / 255, g / 255, b / 255, 0.85);
+    }
+
+    function ndviColor(val) {
+        // Red (bare) → Yellow → Green (vegetated)
+        const t = Math.max(0, Math.min(1, (val + 1) / 2));
+        const r = Math.round(255 * (1 - t));
+        const g = Math.round(255 * t);
+        return new Cesium.Color(r / 255, g / 255, 0.2, 0.85);
+    }
+
+    function ndbiColor(val) {
+        // Blue (water/vegetation) → Red (built-up)
+        const t = Math.max(0, Math.min(1, (val + 0.5) / 1.0));
+        const r = Math.round(t * 255);
+        const b = Math.round((1 - t) * 255);
+        return new Cesium.Color(r / 255, 0.3, b / 255, 0.85);
+    }
+
+    function residualColor(val) {
+        // Negative (blue) → 0 (white) → Positive (red)
+        const t = Math.max(0, Math.min(1, (val + 1) / 2));
+        const r = Math.round(t * 255);
+        const b = Math.round((1 - t) * 255);
+        return new Cesium.Color(r / 255, 0.5, b / 255, 0.85);
+    }
+
+    function sigColor(d) {
+        const count = d.sig_ndvi + d.sig_ndbi + d.sig_distw;
+        if (count === 3) return new Cesium.Color(1, 0.1, 0.2, 0.9);
+        if (count === 2) return new Cesium.Color(1, 0.6, 0, 0.85);
+        if (count === 1) return new Cesium.Color(1, 1, 0, 0.8);
+        return new Cesium.Color(0.4, 0.4, 0.4, 0.3);
+    }
+
+    // ── Dashboard beta color scales (RdYlBu diverging) ──
+    function betaNdviColor(val) {
+        // min -0.128, max 0.316 — Blue→Yellow→Red
+        const t = Math.max(0, Math.min(1, (val - (-0.128)) / (0.316 - (-0.128))));
+        return _divergingBlueYellowRed(t);
+    }
+    function betaNdbiColor(val) {
+        // min 0.696, max 0.722 — Blue→White→Dark Blue
+        const t = Math.max(0, Math.min(1, (val - 0.696) / (0.722 - 0.696)));
+        return _sequentialBlues(t);
+    }
+    function betaDistWColor(val) {
+        // min -1.15, max 1.26 — Brown→White→Teal
+        const t = Math.max(0, Math.min(1, (val - (-1.15)) / (1.26 - (-1.15))));
+        return _divergingBrownTeal(t);
+    }
+    function _divergingBlueYellowRed(t) {
+        // 6 stops: #2166ac, #74add1, #abd9e9, #fee090, #f46d43, #d73027
+        const stops = [[33,102,172],[116,173,209],[171,217,233],[254,224,144],[244,109,67],[215,48,39]];
+        return _interpolateStops(stops, t);
+    }
+    function _sequentialBlues(t) {
+        // 6 stops: #f7fbff, #c6dbef, #9ecae1, #4292c6, #08519c, #08306b
+        const stops = [[247,251,255],[198,219,239],[158,202,225],[66,146,198],[8,81,156],[8,48,107]];
+        return _interpolateStops(stops, t);
+    }
+    function _divergingBrownTeal(t) {
+        // 6 stops: #543005, #bf812d, #f6e8c3, #c7eae5, #35978f, #003c30
+        const stops = [[84,48,5],[191,129,45],[246,232,195],[199,234,229],[53,151,143],[0,60,48]];
+        return _interpolateStops(stops, t);
+    }
+    function _interpolateStops(stops, t) {
+        const n = stops.length - 1;
+        const i = Math.min(Math.floor(t * n), n - 1);
+        const f = t * n - i;
+        const r = Math.round(stops[i][0] + (stops[i+1][0] - stops[i][0]) * f);
+        const g = Math.round(stops[i][1] + (stops[i+1][1] - stops[i][1]) * f);
+        const b = Math.round(stops[i][2] + (stops[i+1][2] - stops[i][2]) * f);
+        return new Cesium.Color(r / 255, g / 255, b / 255, 0.85);
+    }
+
+    function getColor(d) {
+        switch (colorMode) {
+            case 'lst': return lstColor(d.lst, 20, 55);
+            case 'ndvi': return ndviColor(d.ndvi);
+            case 'ndbi': return ndbiColor(d.ndbi);
+            case 'residual': return residualColor(d.residual);
+            case 'sig': return sigColor(d);
+            case 'beta_ndvi': return betaNdviColor(d.beta_ndvi);
+            case 'beta_ndbi': return betaNdbiColor(d.beta_ndbi);
+            case 'beta_distw': return betaDistWColor(d.beta_dist_water);
+            default: return lstColor(d.lst, 20, 55);
+        }
+    }
+
+    function getHeight(d) {
+        switch (heightMode) {
+            case 'lst': return (d.lst - 18) * 80;    // LST 20-35 → 160-1360m
+            case 'ndvi': return (d.ndvi + 1) * 300;   // NDVI -1~1 → 0-600m
+            case 'residual': return Math.abs(d.residual) * 600;
+            case 'flat': return 500;
+            default: return (d.lst - 18) * 80;
+        }
+    }
+
+    // ── Initialize Cesium Viewer ──
+    function initViewer() {
+        const container = document.getElementById('cesiumContainer');
+        if (!container) { console.error('cesiumContainer not found'); return; }
+
+        try {
+            viewer = new Cesium.Viewer('cesiumContainer', {
+                animation: false,
+                geocoder: false,
+                timeline: false,
+                baseLayerPicker: false,
+                infoBox: false,
+                selectionIndicator: false,
+                terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+                baseLayer: false,
+                requestRenderMode: false,
+                msaaSamples: 2,
+                shadows: false
+            });
+            window.viewer = viewer;
+        } catch (err) {
+            console.error('Cesium init failed:', err);
+            return;
+        }
+
+        // Load satellite imagery (OpenStreetMap - no token needed)
+        try {
+            const osmImagery = new Cesium.UrlTemplateImageryProvider({
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                credit: '© OpenStreetMap contributors',
+                maximumLevel: 19
+            });
+            viewer.imageryLayers.addImageryProvider(osmImagery, 0);
+            viewer.scene.requestRender();
+        } catch (err) { console.warn('OSM imagery failed:', err); }
+
+        // Hide credits
+        try {
+            if (viewer.cesiumWidget.creditContainer)
+                viewer.cesiumWidget.creditContainer.style.display = 'none';
+        } catch (e) { /* ok */ }
+
+        // Globe settings
+        try {
+            viewer.scene.globe.enableLighting = false;
+            viewer.scene.globe.depthTestAgainstTerrain = false;
+            viewer.scene.globe.showGroundAtmosphere = false;
+            viewer.scene.fog.enabled = false;
+            viewer.scene.requestRender();
+        } catch (e) { console.warn('Globe settings error', e); }
+
+        // Fly to data center (MGWR study area: lat ~10.93-10.99, lng ~106.38-106.60)
+        viewer.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(106.49, 10.96, 5000),
+            orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 }
+        });
+
+        // Mouse move → coordinates
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction(function(movement) {
+            const cartesian = viewer.scene.pickPosition(movement.endPosition);
+            if (cartesian) {
+                const carto = Cesium.Cartographic.fromCartesian(cartesian);
+                const lat = Cesium.Math.toDegrees(carto.latitude).toFixed(5);
+                const lng = Cesium.Math.toDegrees(carto.longitude).toFixed(5);
+                document.getElementById('statusCoord').innerHTML =
+                    '<i class="fas fa-location-dot"></i> Lat: ' + lat + ' | Lng: ' + lng;
+            }
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        // Click → info panel
+        handler.setInputAction(function(click) {
+            const picked = viewer.scene.pick(click.position);
+            if (Cesium.defined(picked) && picked.id && picked.id._mgwrData) {
+                showInfoPanel(picked.id._mgwrData);
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+        // Hover → tooltip
+        const hoverTooltip = document.getElementById('hoverTooltip');
+        handler.setInputAction(function(movement) {
+            const picked = viewer.scene.pick(movement.endPosition);
+            if (Cesium.defined(picked) && picked.id && picked.id._mgwrData) {
+                const d = picked.id._mgwrData;
+                const sigLabel = (d.sig_ndvi || d.sig_ndbi || d.sig_distw)
+                    ? '<span class="badge" style="background:rgba(72,187,120,0.2);color:#68d391">sig</span>'
+                    : '<span class="badge" style="background:rgba(45,55,72,0.8);color:#718096">ns</span>';
+                hoverTooltip.querySelector('.tt-title').innerHTML = 'Điểm MGWR ' + sigLabel;
+                hoverTooltip.querySelector('.tt-body').innerHTML =
+                    '<div class="tt-row">Lon/Lat <span>' + d.lng.toFixed(4) + ', ' + d.lat.toFixed(4) + '</span></div>' +
+                    '<div class="tt-row">LST <span>' + d.lst.toFixed(2) + ' °C</span></div>' +
+                    '<div class="tt-row">β NDVI <span>' + d.beta_ndvi.toFixed(4) + '</span></div>' +
+                    '<div class="tt-row">β NDBI <span>' + d.beta_ndbi.toFixed(4) + '</span></div>' +
+                    '<div class="tt-row">β Dist_W <span>' + d.beta_dist_water.toFixed(4) + '</span></div>' +
+                    '<div class="tt-row">Sig vars <span>' + (d.sig_vars || '—') + '</span></div>';
+                hoverTooltip.style.display = 'block';
+                hoverTooltip.style.left = (movement.endPosition.x + 18) + 'px';
+                hoverTooltip.style.top = (movement.endPosition.y - 12) + 'px';
+            } else {
+                hoverTooltip.style.display = 'none';
+            }
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    }
+
+    // ── Show Info Panel ──
+    function showInfoPanel(d) {
+        document.getElementById('infoCoord').textContent = d.lat.toFixed(4) + ', ' + d.lng.toFixed(4);
+        document.getElementById('infoLST').textContent = d.lst.toFixed(2) + '°C';
+        document.getElementById('infoNDVI').textContent = d.ndvi.toFixed(4);
+        document.getElementById('infoNDBI').textContent = d.ndbi.toFixed(4);
+        document.getElementById('infoDistW').textContent = d.dist_water.toFixed(1);
+        document.getElementById('infoResidual').textContent = d.residual.toFixed(4);
+        document.getElementById('infoBetaNDVI').textContent = d.beta_ndvi_norm.toFixed(2) + '%';
+        document.getElementById('infoBetaNDBI').textContent = d.beta_ndbi_norm.toFixed(2) + '%';
+        document.getElementById('infoBetaDistW').textContent = d.beta_dist_water_norm.toFixed(2) + '%';
+        document.getElementById('infoTNDVI').textContent = d.t_ndvi.toFixed(3);
+
+        let sigHtml = '';
+        sigHtml += '<span class="sig-badge ' + (d.sig_ndvi ? 'sig' : 'nsig') + '">NDVI ' + (d.sig_ndvi ? '✓' : '✗') + '</span>';
+        sigHtml += '<span class="sig-badge ' + (d.sig_ndbi ? 'sig' : 'nsig') + '">NDBI ' + (d.sig_ndbi ? '✓' : '✗') + '</span>';
+        sigHtml += '<span class="sig-badge ' + (d.sig_distw ? 'sig' : 'nsig') + '">DistW ' + (d.sig_distw ? '✓' : '✗') + '</span>';
+        document.getElementById('infoSigVars').innerHTML = sigHtml;
+
+        document.getElementById('infoPanel').classList.add('show');
+    }
+
+    // ── Map short keys to full field names ──
+    function mapData(raw) {
+        return raw.map(function(d) {
+            return {
+                lng: d.lng, lat: d.lat, lst: d.lst, ndvi: d.ndvi, ndbi: d.ndbi,
+                dist_water: d.dw,
+                beta_ndvi: d.bn, beta_ndbi: d.bb, beta_dist_water: d.bw,
+                beta_ndvi_norm: d.bnn, beta_ndbi_norm: d.bbn, beta_dist_water_norm: d.bwn,
+                t_ndvi: d.tn, t_ndbi: d.tb, t_dist_water: d.tw,
+                sig_ndvi: d.sn, sig_ndbi: d.sb, sig_distw: d.sw,
+                sig_vars: d.sv, residual: d.r
+            };
+        });
+    }
+
+    // ── Load Data (from embedded data.js — no backend needed) ──
+    function loadData() {
+        try {
+            if (typeof MGWR_DATA === 'undefined') throw new Error('data.js not loaded');
+            mgwrData = mapData(MGWR_DATA);
+            document.getElementById('statTotal').textContent = mgwrData.length;
+            applyFilters();
+            document.getElementById('statusInfo').textContent =
+                'MGWR WebGIS 3D | ' + mgwrData.length + ' điểm (GitHub Pages)';
+        } catch (err) {
+            console.error('Data load error:', err);
+            document.getElementById('statusInfo').textContent = 'Error: ' + err.message;
+        }
+    }
+
+    function applyFilters() {
+        const lstMin = parseFloat(document.getElementById('lstMin').value);
+        const lstMax = parseFloat(document.getElementById('lstMax').value);
+        const ndviMin = parseFloat(document.getElementById('ndviMin').value);
+        const ndviMax = parseFloat(document.getElementById('ndviMax').value);
+        const sigOnly = document.getElementById('sigOnly').checked;
+
+        filteredData = mgwrData.filter(d => {
+            return d.lst >= lstMin && d.lst <= lstMax && d.ndvi >= ndviMin && d.ndvi <= ndviMax;
+        });
+        if (sigOnly) {
+            filteredData = filteredData.filter(d => d.sig_ndvi || d.sig_ndbi || d.sig_distw);
+        }
+
+        // Update labels
+        document.getElementById('lstRangeVal').textContent = lstMin.toFixed(1) + ' - ' + lstMax.toFixed(1) + '°C';
+        document.getElementById('ndviRangeVal').textContent = ndviMin.toFixed(2) + ' - ' + ndviMax.toFixed(2);
+
+        renderPoints();
+    }
+
+    // ── Render 3D Pillars ──
+    function renderPoints() {
+        if (!viewer) return;
+
+        // Remove old data source
+        if (mgwrDataSource) {
+            viewer.dataSources.remove(mgwrDataSource, true);
+            mgwrDataSource = null;
+        }
+
+        mgwrDataSource = new Cesium.CustomDataSource('MGWR_Points');
+        var opacityVal = parseInt(document.getElementById('opacitySlider').value) / 100;
+
+        var avgLst = 0;
+        var sigCount = 0;
+        var entities = mgwrDataSource.entities;
+
+        filteredData.forEach(function(d) {
+            avgLst += d.lst;
+            if (d.sig_ndvi || d.sig_ndbi || d.sig_distw) sigCount++;
+
+            var h = getHeight(d);
+            var color = getColor(d);
+            var height = Math.max(200, h);
+            var topRadius = 60;   // 60m radius top
+            var bottomRadius = 80; // 80m radius bottom (taper for 3D effect)
+
+            // Create 3D cylinder column — position at height/2 so bottom sits on ground
+            var entity = entities.add({
+                position: Cesium.Cartesian3.fromDegrees(d.lng, d.lat, height / 2),
+                cylinder: {
+                    length: height,
+                    topRadius: topRadius,
+                    bottomRadius: bottomRadius,
+                    material: color.withAlpha(opacityVal),
+                    outline: true,
+                    outlineColor: Cesium.Color.WHITE.withAlpha(0.1),
+                    numberOfVerticalLines: 0
+                }
+            });
+            entity._mgwrData = d; // store for click/hover picking
+        });
+
+        viewer.dataSources.add(mgwrDataSource);
+
+        // Update stats
+        if (filteredData.length > 0) avgLst /= filteredData.length;
+        document.getElementById('statVisible').textContent = filteredData.length;
+        document.getElementById('statAvgLST').textContent = avgLst.toFixed(1);
+        document.getElementById('statSigCount').textContent = sigCount;
+
+        // Update legend
+        updateLegend();
+        viewer.scene.requestRender();
+    }
+
+    function updateLegend() {
+        const bar = document.getElementById('legendBar');
+        const minEl = document.getElementById('legendMin');
+        const maxEl = document.getElementById('legendMax');
+
+        switch (colorMode) {
+            case 'lst':
+                bar.style.background = 'linear-gradient(to right, #0000c8, #00aaff, #ffff6f, #ff8000, #ff0000)';
+                minEl.textContent = '20°C'; maxEl.textContent = '55°C';
+                break;
+            case 'ndvi':
+                bar.style.background = 'linear-gradient(to right, #ff0000, #ffff00, #00ff00)';
+                minEl.textContent = '-1'; maxEl.textContent = '1';
+                break;
+            case 'beta_ndvi':
+                bar.style.background = 'linear-gradient(to right, #2166ac, #74add1, #abd9e9, #fee090, #f46d43, #d73027)';
+                minEl.textContent = '-0.13'; maxEl.textContent = '0.32';
+                break;
+            case 'beta_ndbi':
+                bar.style.background = 'linear-gradient(to right, #f7fbff, #c6dbef, #9ecae1, #4292c6, #08519c, #08306b)';
+                minEl.textContent = '0.696'; maxEl.textContent = '0.722';
+                break;
+            case 'beta_distw':
+                bar.style.background = 'linear-gradient(to right, #543005, #bf812d, #f6e8c3, #c7eae5, #35978f, #003c30)';
+                minEl.textContent = '-1.15'; maxEl.textContent = '1.26';
+                break;
+            case 'ndbi':
+                bar.style.background = 'linear-gradient(to right, #0000ff, #8030ff, #ff0000)';
+                minEl.textContent = '-0.5'; maxEl.textContent = '0.5';
+                break;
+            case 'residual':
+                bar.style.background = 'linear-gradient(to right, #0000ff, #ffffff, #ff0000)';
+                minEl.textContent = '-1'; maxEl.textContent = '1';
+                break;
+            case 'sig':
+                bar.style.background = 'linear-gradient(to right, #666666, #ffff00, #ff9900, #ff1a33)';
+                minEl.textContent = '0'; maxEl.textContent = '3';
+                break;
+        }
+        drawDynamicLegend();
+    }
+
+    // ── Dynamic legend (dashboard style with swatches) ──
+    function drawDynamicLegend() {
+        const el = document.getElementById('dynamicLegend');
+        const legendConfigs = {
+            beta_ndvi: {
+                colors: ['#2166ac','#74add1','#abd9e9','#fee090','#f46d43','#d73027'],
+                values: [-0.128, -0.039, 0.050, 0.139, 0.228, 0.316]
+            },
+            beta_ndbi: {
+                colors: ['#f7fbff','#c6dbef','#9ecae1','#4292c6','#08519c','#08306b'],
+                values: [0.696, 0.701, 0.706, 0.711, 0.717, 0.722]
+            },
+            beta_distw: {
+                colors: ['#543005','#bf812d','#f6e8c3','#c7eae5','#35978f','#003c30'],
+                values: [-1.15, -0.67, -0.19, 0.29, 0.77, 1.26]
+            }
+        };
+        const cfg = legendConfigs[colorMode];
+        if (!cfg) { el.innerHTML = ''; return; }
+        let html = '';
+        cfg.colors.forEach((c, i) => {
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12px;color:#a0aec0">'
+                  + '<div style="width:12px;height:12px;border-radius:2px;background:' + c + ';flex-shrink:0"></div>'
+                  + '<span>' + cfg.values[i].toFixed(3) + '</span></div>';
+        });
+        el.innerHTML = html;
+    }
+
+    // ── Initialize histogram from loaded data ──
+    let histChart = null;
+    function initHistogram() {
+        if (!mgwrData.length) return;
+        const ndviVals = mgwrData.map(d => d.beta_ndvi);
+        const bins = Array.from({length: 20}, (_, i) => -0.13 + i * 0.023);
+        const counts = Array(19).fill(0);
+        ndviVals.forEach(v => {
+            const i = Math.min(18, Math.max(0, Math.floor((v + 0.13) / 0.023)));
+            counts[i]++;
+        });
+        const bgColors = bins.slice(0, -1).map(b => b < 0 ? 'rgba(33,102,172,0.7)' : 'rgba(212,81,48,0.7)');
+        if (histChart) histChart.destroy();
+        histChart = new Chart(document.getElementById('histChart'), {
+            type: 'bar',
+            data: {
+                labels: bins.slice(0, -1).map(b => b.toFixed(2)),
+                datasets: [{
+                    data: counts, backgroundColor: bgColors,
+                    borderWidth: 0, barPercentage: 1, categoryPercentage: 1
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: ctx => 'β NDVI: ' + ctx[0].label,
+                            label: ctx => 'n = ' + ctx.raw + ' điểm'
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#718096', font: { size: 9 }, maxTicksLimit: 5 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#718096', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+    }
+
+    // ── Helpers ──
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+
+    // ── Event Listeners ──
+    function setupEvents() {
+        // Color mode buttons
+        document.querySelectorAll('.color-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.color-mode-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                colorMode = this.dataset.mode;
+                renderPoints();
+                drawDynamicLegend();
+            });
+        });
+
+        // Height mode buttons
+        document.querySelectorAll('.height-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.height-mode-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                heightMode = this.dataset.mode;
+                renderPoints();
+            });
+        });
+
+        // Filter sliders
+        ['lstMin', 'lstMax', 'ndviMin', 'ndviMax'].forEach(id => {
+            document.getElementById(id).addEventListener('input', debounce(() => applyFilters(), 300));
+        });
+
+        // Significance filter
+        document.getElementById('sigOnly').addEventListener('change', () => applyFilters());
+
+        // Opacity slider — update label immediately, debounce the heavy re-render
+        const debouncedOpacityRender = debounce(() => renderPoints(), 150);
+        document.getElementById('opacitySlider').addEventListener('input', function() {
+            document.getElementById('opacityVal').textContent = this.value + '%';
+            debouncedOpacityRender();
+        });
+
+        // Sidebar toggle
+        document.getElementById('toggleSidebar').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('hidden');
+        });
+    }
+
+    // ── Boot ──
+    initViewer();
+    setupEvents();
+    loadData();
+    initHistogram();
+    // Hide loading overlay after data and camera are ready
+    setTimeout(() => {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.add('hide');
+            setTimeout(() => overlay.style.display = 'none', 500);
+        }
+    }, 1500);
+    </script>
+</body>
+</html>
