@@ -37,32 +37,6 @@ gh-pages/
 
 **Không cần backend** — tất cả dữ liệu được embed trong `data.js`.
 
-## Deploy lên GitHub Pages
-
-### Cách 1: GitHub Pages từ thư mục `gh-pages`
-
-```bash
-# 1. Clone repo
-git clone https://github.com/YOUR_USERNAME/mgwr-3d-dashboard.git
-cd mgwr-3d-dashboard
-
-# 2. Copy files vào root (hoặc gh-pages branch)
-# Copy toàn bộ nội dung thư mục gh-pages/ vào repo
-
-# 3. Push
-git add .
-git commit -m "Deploy MGWR 3D Dashboard"
-git push origin main
-
-# 4. Bật GitHub Pages: Settings → Pages → Source: main branch
-```
-
-### Cách 2: Deploy từ thư mục `gh-pages` của repo hiện tại
-
-1. Vào **Settings** → **Pages**
-2. Source: **Deploy from a branch**
-3. Branch: `main`, folder: `/gh-pages`
-4. Save → Chờ 1-2 phút → Truy cập URL
 
 ## Công nghệ
 
